@@ -9,7 +9,7 @@ testing repo for tensor-rt chatbot in docker
 
 * Build docker container (this took 14 min to complete on a SoftLayer Baremetal 32-core Xeon E5-2620 system)
 
-      docker build -t tensorrt-chatbot --squash --no-cache --compress
+      docker build -t tensorrt-chatbot --squash --no-cache --compress .
 
 # Execute
 
