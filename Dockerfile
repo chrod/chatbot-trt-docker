@@ -16,25 +16,20 @@ RUN curl https://bootstrap.pypa.io/get-pip.py | python
 # install nvidia repo for tensorrt, others; TODO: ensure this is ok w/ nvidia for us to mirror, this is a file that developers only have permission to download from nvidia after registration
 RUN bash -c 'wget -O /tmp/nv-tensorrt-repo.deb http://1dd40.http.tor01.cdn.softlayer.net/nvidia-media/nv-tensorrt-repo-ubuntu1604-ga-cuda9.0-trt3.0-20171128_1-1_$(dpkg --print-architecture).deb && dpkg -i /tmp/nv-tensorrt-repo.deb'
 
-RUN bash -c 'wget -O /tmp/nv-cuda-repo.deb http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1604/x86_64/cuda-repo-ubuntu1604_9.1.85-1_$(dpkg --print-architecture).deb && dpkg -i /tmp/nv-cuda-repo.deb'
+RUN bash -c 'wget -O /tmp/nv-cuda-repo.deb http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1604/x86_64/cuda-repo-ubuntu1604_9.0.176-1_$(dpkg --print-architecture).deb && dpkg -i /tmp/nv-cuda-repo.deb'
 
 RUN apt-key adv --fetch-keys http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1604/x86_64/7fa2af80.pub
 
-RUN apt-get update && apt-get install -y --no-install-recommends cuda tensorrt
+RUN apt-get update && apt-get install -y --no-install-recommends cuda-9-0 tensorrt
 
 # install nvidia packages
 RUN apt-get update && apt-get install -y libnvinfer4 libnvinfer-dev python-libnvinfer-doc uff-converter-tf tensorrt cuda-cublas-dev-9-0
 
-ENV CUDA_INC_DIR=/usr/local/cuda-9.1
-ENV PATH=/usr/local/cuda-9.1/bin:$PATH
+ENV CUDA_INC_DIR=/usr/local/cuda-9.0
+ENV PATH=/usr/local/cuda-9.0/bin:$PATH
 
 # install old cudart libs
 RUN apt-get update && apt-get install -y cuda-cudart-9-0 cuda-cudart-dev-9-0
-
-# add old cuda libs to library path with some silly business
-RUN mkdir -p /usr/local/cuda-compat && echo "/usr/local/cuda-compat" > /etc/ld.so.conf.d/cuda-compat.conf
-RUN ln -s /usr/local/cuda-9.0/targets/x86_64-linux/lib/libcublas.so.9.0 /usr/local/cuda-compat/
-RUN ln -s /usr/local/cuda-9.0/targets/x86_64-linux/lib/libcudart.so.9.0 /usr/local/cuda-compat/
 
 RUN ldconfig
 
@@ -42,7 +37,7 @@ RUN ldconfig
 RUN pip install --no-cache-dir tensorflow numpy protobuf==3.4.0
 
 RUN cd /tmp; curl https://pypi.python.org/packages/b3/30/9e1c0a4c10e90b4c59ca7aa3c518e96f37aabcac73ffe6b5d9658f6ef843/pycuda-2017.1.1.tar.gz | tar xzvf - && cd pycuda-2017.1.1 && \
-	./configure.py --cuda-root=/usr/local/cuda-9.1 --cudadrv-lib-dir=/usr/lib --boost-inc-dir=/usr/include --boost-lib-dir=/usr/lib --boost-python-libname=boost_python-py27 --boost-thread-libname=boost_thread && \
+	./configure.py --cuda-root=/usr/local/cuda-9.0 --cudadrv-lib-dir=/usr/lib --boost-inc-dir=/usr/include --boost-lib-dir=/usr/lib --boost-python-libname=boost_python-py27 --boost-thread-libname=boost_thread && \
 	python setup.py install && \
 	pip install .
 
