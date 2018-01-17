@@ -1,78 +1,51 @@
-FROM ubuntu:16.04
+FROM ubuntu:xenial-20171201
 
 MAINTAINER nuculur@gmail.com
 
+# N.B. The downloads are arch-dependent, they use dpkg at runtime on the build box to determine the appropriate arch. If a download fails, it might be because the arch isn't supported
 
-# update system
-RUN apt-get update && apt-get -y upgrade && apt-get -y install python python-pip curl git wget swig
+ENV DEBIAN_FRONTEND=noninteractive
+ENV DEBCONF_NONINTERACTIVE_SEEN=true
 
-# Copy local libs over
-RUN mkdir -p /root/src
-#COPY *.deb /tmp/
+RUN apt-get update && apt-get install -y wget curl git build-essential libboost-all-dev python python-pip python-dev libboost-python-dev libboost-thread-dev
 
-ARG URL91=https://developer.nvidia.com/compute/cuda/9.1/Prod/local_installers/
-ARG URL90=https://developer.nvidia.com/compute/cuda/9.0/Prod/local_installers/
+# install python, related
+RUN apt-get update && apt-get install -y python
+RUN curl https://bootstrap.pypa.io/get-pip.py | python
 
-# Install CUDA 9.1 libs (with latest nvidia-387)
-#wget $URL_90/cuda-repo-ubuntu1604-9-0-local_9.0.176-1_amd64
-#wget $URL_91/cuda-repo-ubuntu1604-9-1-local_9.1.85-1_amd64
-RUN curl -sL $URL90/cuda-repo-ubuntu1604-9-0-local_9.0.176-1_amd64-deb -so /tmp/cuda-repo-ubuntu1604-9-0_amd64.deb
-RUN curl -sL $URL91/cuda-repo-ubuntu1604-9-1-local_9.1.85-1_amd64 -so /tmp/cuda-repo-ubuntu1604-9-1_amd64.deb
-RUN dpkg -i /tmp/cuda-repo-ubuntu1604-9-0_amd64.deb
-RUN apt-key add /var/cuda-repo-9-0-local/7fa2af80.pub
-RUN DEBIAN_FRONTEND=noninteractive apt-get install lightdm -y
-RUN apt-get update && apt-get -y install cuda cuda-cublas-9-0
+# install nvidia repo for tensorrt, others; TODO: ensure this is ok w/ nvidia for us to mirror, this is a file that developers only have permission to download from nvidia after registration
+RUN bash -c 'wget -O /tmp/nv-tensorrt-repo.deb http://1dd40.http.tor01.cdn.softlayer.net/nvidia-media/nv-tensorrt-repo-ubuntu1604-ga-cuda9.0-trt3.0-20171128_1-1_$(dpkg --print-architecture).deb && dpkg -i /tmp/nv-tensorrt-repo.deb'
 
-# Install CUDA 9.0 to deal with lib compatibility issues
-RUN dpkg -i /tmp/cuda-repo-ubuntu1604-9-1_amd64.deb
-RUN apt-get update && apt-get -y install cuda cuda-cublas-9-1
+RUN bash -c 'wget -O /tmp/nv-cuda-repo.deb http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1604/x86_64/cuda-repo-ubuntu1604_9.0.176-1_$(dpkg --print-architecture).deb && dpkg -i /tmp/nv-cuda-repo.deb'
 
-#RUN ln -s /usr/local/cuda-9.0/lib64/libcublas.so.9.0 /usr/local/cuda/lib64/libcublas.so.9.0
-RUN ln -s /usr/local/cuda-9.0/lib64/libcu*.so.9.0 /usr/local/cuda/lib64/
-RUN export PATH=$PATH:/usr/local/cuda-9.0/bin
+RUN apt-key adv --fetch-keys http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1604/x86_64/7fa2af80.pub
 
-# Install TensorRT
-#wget https://developer.nvidia.com/compute/machine-learning/tensorrt/3.0/ga/nv-tensorrt-repo-ubuntu1604-ga-cuda9.0-trt3.0-20171128_1-1_amd64-deb
-RUN dpkg -i /tmp/nv-tensorrt-repo-ubuntu1604-ga-cuda9.0-trt3.0-20171128_1-1_amd64.deb
-RUN apt-get update && apt-get install -y libnvinfer4 libnvinfer-dev libnvinfer-samples tensorrt
-RUN apt-get update && apt-get install tensorrt
-RUN apt-get install -y python-libnvinfer-doc python3-libnvinfer-doc uff-converter-tf
-# Check for TensorRT installed
-RUN dpkg -l | grep TensorRT
+RUN apt-get update && apt-get install -y --no-install-recommends cuda-9-0 tensorrt
 
-# Install tensorflow, numpy
-RUN pip install --no-cache-dir tensorflow numpy
+# install nvidia packages
+RUN apt-get update && apt-get install -y libnvinfer4 libnvinfer-dev python-libnvinfer-doc uff-converter-tf tensorrt cuda-cublas-dev-9-0
 
-# Install protobuf 3.4.0 (must be this version)
-RUN apt-get remove python-protobuf libprotobuf-dev
-RUN apt-get install -y unzip
-RUN wget https://github.com/google/protobuf/releases/download/v3.4.0/protobuf-python-3.4.0.zip
-RUN unzip protobuf-python-3.4.0.zip -d /tmp/
-WORKDIR /tmp/protobuf-3.4.0
-RUN /bin/bash -c "./configure"
-RUN make -j7
-RUN make install
+ENV CUDA_INC_DIR=/usr/local/cuda-9.0
+ENV PATH=/usr/local/cuda-9.0/bin:$PATH
+
+# install old cudart libs
+RUN apt-get update && apt-get install -y cuda-cudart-9-0 cuda-cudart-dev-9-0
+
 RUN ldconfig
 
-# Install PyCUDA      from: https://wiki.tiker.net/PyCuda/Installation/Linux/Ubuntu
-ENV CUDA_ROOT=/usr/local/cuda-9.1
-RUN apt-get install -y build-essential gcc g++ libboost-all-dev python-dev python-setuptools libboost-python-dev libboost-thread-dev
-WORKDIR /tmp
-RUN curl https://pypi.python.org/packages/b3/30/9e1c0a4c10e90b4c59ca7aa3c518e96f37aabcac73ffe6b5d9658f6ef843/pycuda-2017.1.1.tar.gz | tar xzvf -
-WORKDIR /tmp/pycuda-2017.1.1
-RUN ./configure.py --cuda-root=/usr/local/cuda-9.1 --cudadrv-lib-dir=/usr/lib --boost-inc-dir=/usr/include --boost-lib-dir=/usr/lib --boost-python-libname=boost_python-py27 --boost-thread-libname=boost_thread
-RUN make -j4
-RUN python setup.py install
-RUN ldconfig
-RUN pip install .
+# important to not get protobuf 3.5.1 depended-on by tensorflow
+RUN pip install --no-cache-dir tensorflow numpy protobuf==3.4.0
 
-# Clone repo
-RUN git clone https://github.com/AastaNV/ChatBot.git /root/src/ChatBot
-RUN cd /root/src/ChatBot
-WORKDIR /root/src/ChatBot
+RUN cd /tmp; curl https://pypi.python.org/packages/b3/30/9e1c0a4c10e90b4c59ca7aa3c518e96f37aabcac73ffe6b5d9658f6ef843/pycuda-2017.1.1.tar.gz | tar xzvf - && cd pycuda-2017.1.1 && \
+	./configure.py --cuda-root=/usr/local/cuda-9.0 --cudadrv-lib-dir=/usr/lib --boost-inc-dir=/usr/include --boost-lib-dir=/usr/lib --boost-python-libname=boost_python-py27 --boost-thread-libname=boost_thread && \
+	python setup.py install && \
+	pip install .
 
-# run command, translate model (if it works... success!!)
-#RUN python src/tf_to_uff/tf_to_trt.py model/ID210_649999 model/ID210_649999.uff
+## Clone repo
+RUN git clone https://github.com/AastaNV/ChatBot.git /root/ChatBot
+WORKDIR /root/ChatBot
 
-# Dev stuff
-RUN apt-get install -y vim
+## Cleanup for squashed image (N.B. there are a *lot* of packages installed that aren't necessary but they're non-optional dependencies of cuda, xorg, gnome, etc. are examples. If it's desirable to slim this image down we'll need to use dpkg -P with particular installed packages' names to remove them, or set up apt policies to prevent installing them in the first place)
+RUN rm -Rf /tmp/* /var/cache/apt/archives/*
+
+CMD ["python","src/tf_to_uff/tf_to_trt.py","model/ID210_649999","model/ID210_649999.uff"]
